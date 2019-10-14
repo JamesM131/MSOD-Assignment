@@ -1,0 +1,85 @@
+---
+title: "Chi Squared Analysis"
+author: "James Monks"
+date: "13/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(infer)
+```
+
+
+Using large scale survey data [found here](https://www.pewresearch.org/fact-tank/2019/04/10/share-of-u-s-adults-using-social-media-including-facebook-is-mostly-unchanged-since-2018/) a set of expected usage proportions can be established. 
+
+First creating the data set from the survey data. 
+```{r}
+big_survey <- tibble(
+  social = c("YouTube", "Facebook", "Instagram", "Pintrest", "LinkedIn", "Snapchat", "Twitter", "WhatsApp", "Reddit"), 
+  all = c(73, 69, 37, 28, 27, 24, 22, 20, 11), 
+  men = c(78, 63, 31, 15, 29, 24, 24, 21, 15), 
+  women = c(68, 75, 43, 42, 24, 24, 21, 19, 9)
+) %>% 
+  mutate(social = janitor::make_clean_names(social))
+```
+
+
+Now calculate the same metric for the obserced data. This data is the percentage of respondents that use the 
+```{r}
+survey_use <- read_rds(here::here("data", "survey_clean.rds")) %>% 
+  select(starts_with("use"))
+
+long_survey <- survey_use %>% 
+  pivot_longer(everything(), names_to = "social") %>% 
+  mutate(social = str_extract(social, "(?<=_).+")) %>% 
+  filter(value != 0)
+
+
+
+percentage_use <- tibble(
+  social = names(survey_use),
+  observed = colSums(survey_use)/nrow(survey_use) * 100
+) %>% 
+  mutate(social = str_extract(social, "(?<=_).+"))
+
+```
+
+```{r}
+data <- percentage_use %>% 
+  left_join(big_survey) %>% 
+  na.omit() %>% 
+  select(-c(men, women)) %>% 
+  rename(expected = all) # %>% 
+  # pivot_longer(observed:expected, names_to = "type", values_to = "percent")
+
+```
+```{r}
+processed_data <- data %>% 
+  mutate(expected = expected/sum(expected)) %>% 
+  mutate(observed = round(observed))
+names_expected <- processed_data$expected %>% 
+  set_names(processed_data$social)
+
+obs_chi_stat <- long_survey %>% 
+  filter(social != "pinterest") %>% 
+  infer::specify(social ~ NULL) %>% 
+  hypothesize(null = "point", p = names_expected) %>% 
+  calculate(stat = "Chisq") %>% 
+  pull(stat)
+
+obs_chi <- long_survey %>%
+  filter(social != "pinterest") %>% 
+  specify(social ~ NULL) %>% 
+  hypothesize(null = "point", p = names_expected) %>%
+  generate(1000) %>% 
+  calculate("Chisq")
+
+obs_chi %>% 
+  visualize(method = "both") + 
+  shade_p_value(obs_stat = obs_chi_stat, direction = "right") + 
+  ggthemes::theme_fivethirtyeight()
+```
+
+
