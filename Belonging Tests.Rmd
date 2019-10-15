@@ -1,0 +1,175 @@
+---
+title: "Belonging Tests`"
+author: "James Monks"
+date: "15/10/2019"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+survey <- read_rds(here::here("data", "survey_clean.rds"))
+```
+
+# Deciding on Groups and Target Var
+There are quite a few factors that we have that can be used in an analysis of variance. The immediately obvious ones are education and relationship status. Additionally age brakcet could be used along with gender (which would be conducted as a t-test probably, as despite habing 3 possible options, only 2 were ever selected).
+
+
+The main variable that is being observed here is the need to belong metric. For the moment this will be used as the response variable. 
+
+# Doing the ANOVA
+
+```{r}
+survey %>% 
+  mutate(education = factor(education)) %>% 
+  {aov(need_to_belong ~ education, data = .)} %>% 
+  summary()
+  
+```
+
+```{r}
+survey %>% 
+  mutate(relationship_status = factor(relationship_status)) %>% 
+  {aov(need_to_belong ~ relationship_status, data = .)} %>% 
+  summary()
+  
+survey %>% 
+  mutate(gender = factor(gender)) %>% 
+  {aov(need_to_belong ~ gender, data = .)} %>% 
+  summary()
+  
+```
+
+
+
+
+# T test
+
+Say we hypothesize that the need to belong metric is stronger in women than it is in men due to the commonly reported on self image issues in young women perpetuated by standards set in both traditional and social media. 
+
+Then the following 
+
+```{r}
+library(infer)
+
+obs_t <- 
+  survey %>% 
+  mutate(gender = factor(gender)) %>% 
+  specify(need_to_belong ~ gender) %>%
+  calculate(stat = "t", order = c(1, 2))
+
+survey %>% 
+  mutate(gender = factor(gender)) %>% 
+  specify(need_to_belong ~ gender, ) %>% 
+  hypothesize(null = "independence") %>% 
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "t", order = c(1, 2), ) %>% 
+  visualise(method = "both") + 
+  shade_p_value(obs_stat = obs_t, direction = "left")
+
+
+
+
+```
+
+```{r}
+gender_test <- survey %>% 
+  mutate(gender = factor(gender)) %>% 
+  t_test(formula = need_to_belong ~ gender, alternative = "less",
+         order = c(1, 2))
+
+gender_test
+
+
+```
+
+
+
+```{r}
+social_num <- survey %>% 
+  select(starts_with("use")) %>% 
+  rowSums()
+
+ob
+survey %>% 
+  mutate(social_num_var = social_num) %>% 
+  mutate(social_num_cat = ifelse(social_num_var >6, "High", "Low")) %>% 
+  specify(need_to_belong ~ social_num_cat) %>% 
+  generate(1000, type = "simulate") %>% 
+  calculate(stat = "t", order = c("High", "Low")) %>% 
+  visualise(method = "both") 
+```
+
+
+# We could do a favourits social type thing?
+```{r}
+survey %>% 
+  select(starts_with("rank")) %>% 
+  pivot_longer(everything()) %>%
+  filter(value == 1)
+```
+
+# Maybe do something comparing the rank given to facebook/instagram and the need to belong metric
+
+```{r}
+survey %>% 
+  mutate(social_num_var = social_num) %>% 
+  mutate(social_num_cat = ifelse(social_num_var >6, "High", "Low")) %>%
+  mutate(gender = factor(gender)) %>% 
+  specify(gender ~ social_num_cat) %>% 
+  hypothesize(null = "independance") %>% 
+  calculate(stat = "Chisq")
+
+obs_chisq <- 
+  survey %>% 
+  mutate(social_num_var = social_num) %>% 
+  mutate(social_num_cat = factor(ifelse(social_num_var >6, "High", "Low"))) %>%
+  mutate(gender = factor(ifelse(gender == 1, "Male", "Female"))) %>% 
+  select(gender, social_num_cat) %>% 
+  specify(social_num_cat ~ gender, success = "High") %>% 
+  generate(1000) %>% 
+  calculate("Chisq", order = c("Female", "Male")) %>% 
+  visualise()
+
+```
+
+
+
+
+
+# Successful Tests
+```{r}
+survey %>% 
+  select(gender, follow_on_instagram, intensity_of_instagram_use, need_to_belong, age) %>% 
+  corrr::correlate() %>% 
+  corrr::rplot() + 
+  ggthemes::theme_fivethirtyeight()
+
+
+
+# aov(need_to_belong ~ factor(instagram_usage), survey) %>% 
+#   summary()
+
+
+survey %>% 
+  ggplot(aes(x = factor(instagram_usage), y = need_to_belong)) + 
+  geom_boxplot() + 
+  ggthemes::theme_fivethirtyeight() + 
+  ggtitle("Need To Belong by Instagram Usage")
+
+library(tidyverse)
+ranks_survey <- survey %>% 
+  select(starts_with("rank")) %>% 
+  pivot_longer(everything(), names_to = "social") %>% 
+  mutate(value = as.factor(value), social = as.factor(social))
+
+kruskal.test(value ~ social, data = ranks_survey)
+
+
+
+manova_survey <- manova(cbind(need_to_belong, intensity_of_instagram_use) ~ gender, survey)
+summary(manova_survey)
+=
+```
+
