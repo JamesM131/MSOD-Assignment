@@ -5,6 +5,7 @@ date: "15/10/2019"
 output: html_document
 ---
 
+# Mostly look at the bottom two code chunks, the rest are tests that weren't significant, or failed attempts at stuff
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -140,6 +141,9 @@ obs_chisq <-
 
 # Successful Tests
 ```{r}
+
+library(tidyverse)
+survey <- read_rds(here::here("data", "survey_clean.rds"))
 survey %>% 
   select(gender, follow_on_instagram, intensity_of_instagram_use, need_to_belong, age) %>% 
   corrr::correlate() %>% 
@@ -170,6 +174,20 @@ kruskal.test(value ~ social, data = ranks_survey)
 
 manova_survey <- manova(cbind(need_to_belong, intensity_of_instagram_use) ~ gender, survey)
 summary(manova_survey)
-=
+
+```
+
+
+```{r}
+survey %>% 
+  mutate(gender = ifelse(gender == 1, "Male", "Female")) %>% 
+  ggplot(aes(x = intensity_of_instagram_use, y = need_to_belong)) + 
+  geom_point() + 
+  facet_wrap(~gender) + 
+  ggthemes::theme_fivethirtyeight() + 
+  theme(axis.title = element_text()) + 
+  ylab("Need to Belong") + 
+  xlab("Intensity of Instagram use")
+ 
 ```
 
